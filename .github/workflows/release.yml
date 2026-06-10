@@ -90,3 +90,36 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.rust_target }}
+
+      # Nur Mac: der Mac-Installer ist eine "Diskette" (DMG). Standardmaessig traegt
+      # die Diskette dasselbe Icon wie die App -> verwechselbar. Hier bekommt NUR die
+      # Diskette ein eigenes Icon (BauKI-Logo + Download-Abzeichen). Das App-Icon bleibt
+      # unveraendert. Best-effort: schlaegt das fehl, bleibt der Bau trotzdem gueltig
+      # (dann eben mit Standard-Diskette). Der Auto-Updater nutzt die .app.tar.gz, NICHT
+      # die DMG -> dieser Schritt kann Updates nicht beeinflussen.
+      - name: Diskette mit Download-Abzeichen versehen (nur Mac, best-effort)
+        if: matrix.os == 'macos-14'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -x
+          ICON="bauki-desktop/src-tauri/dmg/VolumeIcon.icns"
+          DMG=$(ls bauki-desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/dmg/*.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ] || [ ! -f "$ICON" ]; then
+            echo "DMG ($DMG) oder Icon ($ICON) fehlt -> ueberspringe (Bau bleibt gueltig)."
+            exit 0
+          fi
+          echo "Patche Volume-Icon in: $DMG"
+          hdiutil convert "$DMG" -format UDRW -o rw.dmg -ov
+          MNT=$(hdiutil attach rw.dmg -nobrowse -noautoopen | grep -o "/Volumes/.*" | head -1)
+          cp "$ICON" "$MNT/.VolumeIcon.icns"
+          SetFile -a C "$MNT"
+          sync
+          hdiutil detach "$MNT" || (sleep 3; hdiutil detach "$MNT" -force)
+          hdiutil convert rw.dmg -format UDZO -imagekey zlib-level=9 -o patched.dmg -ov
+          mv -f patched.dmg "$DMG"
+          echo "Lade gepatchte Diskette ins Release (ueberschreibt das Asset)..."
+          gh release upload "${{ inputs.version }}" "$DMG" --clobber --repo "${{ github.repository }}"
+          echo "Fertig: Diskette traegt jetzt das Download-Abzeichen."
