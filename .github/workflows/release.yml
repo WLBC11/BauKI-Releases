@@ -75,9 +75,26 @@ jobs:
         with:
           workspaces: bauki-desktop/src-tauri
 
-      - name: Windows-Signing-Tool installieren (nur Windows)
+      - name: Windows-Signing vorbereiten (Tool + Pfade, nur Windows)
         if: matrix.os == 'windows-latest'
-        run: cargo install trusted-signing-cli --locked
+        shell: pwsh
+        run: |
+          cargo install trusted-signing-cli --locked
+          # Azure CLI finden und dem Signing-Tool bekannt machen (statt fest verdrahtetem Pfad)
+          $az = (Get-Command az -ErrorAction SilentlyContinue).Source
+          if ($az -and ($az -notmatch '\.cmd$')) {
+            $cmd = Join-Path (Split-Path $az) 'az.cmd'
+            if (Test-Path $cmd) { $az = $cmd }
+          }
+          if (-not $az) { throw 'Azure CLI (az) auf dem Runner nicht gefunden' }
+          "AZURE_CLI_PATH=$az" >> $env:GITHUB_ENV
+          Write-Host "AZURE_CLI_PATH = $az"
+          # Signtool (neueste installierte Windows-SDK-Version) finden
+          $st = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction SilentlyContinue |
+                Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+          if (-not $st) { throw 'signtool.exe auf dem Runner nicht gefunden' }
+          "SIGNTOOL_PATH=$($st.FullName)" >> $env:GITHUB_ENV
+          Write-Host "SIGNTOOL_PATH = $($st.FullName)"
 
       - name: App bauen + Auto-Update veroeffentlichen
         uses: tauri-apps/tauri-action@v0
