@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             rust_target: aarch64-apple-darwin
           - os: windows-latest
             rust_target: x86_64-pc-windows-msvc
@@ -122,7 +122,7 @@ jobs:
       # (dann eben mit Standard-Diskette). Der Auto-Updater nutzt die .app.tar.gz, NICHT
       # die DMG -> dieser Schritt kann Updates nicht beeinflussen.
       - name: Diskette mit Download-Abzeichen versehen (nur Mac, best-effort)
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-15'
         continue-on-error: true
         shell: bash
         env:
