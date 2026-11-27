@@ -96,10 +96,21 @@ jobs:
           "SIGNTOOL_PATH=$($st.FullName)" >> $env:GITHUB_ENV
           Write-Host "SIGNTOOL_PATH = $($st.FullName)"
 
+      # 27.11.2026: Ohne diesen Schluessel zeigte die Desktop-App keine 3D-Umgebung (Google-Karten).
+      # Die Web-App bekommt ihn auf dem Server aus frontend/.env.production; die liegt nicht im Repo.
+      - name: Google-Maps-Schluessel vorhanden?
+        shell: bash
+        env:
+          K: ${{ secrets.REACT_APP_GOOGLE_MAPS_API_KEY }}
+        run: |
+          if [ -z "$K" ]; then echo "::error::Secret REACT_APP_GOOGLE_MAPS_API_KEY fehlt - 3D-Umgebung wuerde in der App nicht laufen"; exit 1; fi
+          echo "Maps-Schluessel vorhanden"
+
       - name: App bauen + Auto-Update veroeffentlichen
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REACT_APP_GOOGLE_MAPS_API_KEY: ${{ secrets.REACT_APP_GOOGLE_MAPS_API_KEY }}
           NODE_OPTIONS: --max-old-space-size=4096
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -114,6 +125,13 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.rust_target }}
+
+      - name: Pruefen, ob der Maps-Schluessel im App-Frontend steckt
+        shell: bash
+        env:
+          K: ${{ secrets.REACT_APP_GOOGLE_MAPS_API_KEY }}
+        run: |
+          if grep -rqF "$K" frontend/build/static/js; then echo "Maps-Schluessel im Frontend: ok"; else echo "::error::Maps-Schluessel fehlt im gebauten Frontend"; exit 1; fi
 
       # Nur Mac: der Mac-Installer ist eine "Diskette" (DMG). Standardmaessig traegt
       # die Diskette dasselbe Icon wie die App -> verwechselbar. Hier bekommt NUR die
